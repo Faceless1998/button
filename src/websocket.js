@@ -17,42 +17,56 @@ export const initializeWebSocket = (role) => {
 };
 
 const connectWebSocket = () => {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsUrl = `${protocol}//${window.location.host}/api/websocket`;
+  try {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = process.env.NODE_ENV === 'production' 
+      ? window.location.host
+      : 'localhost:3000';
+    const wsUrl = `${protocol}//${host}/api/websocket`;
 
-  ws = new WebSocket(wsUrl);
+    console.log('Connecting to WebSocket at:', wsUrl);
+    ws = new WebSocket(wsUrl);
 
-  ws.onopen = () => {
-    console.log('Successfully connected to WebSocket');
-    reconnectAttempts = 0;
-    sendMessage('clientConnected', { role: currentRole });
-  };
+    ws.onopen = () => {
+      console.log('Successfully connected to WebSocket');
+      reconnectAttempts = 0;
+      sendMessage('clientConnected', { role: currentRole });
+    };
 
-  ws.onmessage = (event) => {
-    try {
-      const message = JSON.parse(event.data);
-      console.log('Received message:', message);
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        console.log('Received message:', message);
 
-      if (handlers.has(message.type)) {
-        handlers.get(message.type).forEach(handler => handler(message.data));
+        if (handlers.has(message.type)) {
+          handlers.get(message.type).forEach(handler => handler(message.data));
+        }
+      } catch (error) {
+        console.error('Error handling message:', error);
       }
-    } catch (error) {
-      console.error('Error handling message:', error);
-    }
-  };
+    };
 
-  ws.onclose = () => {
-    console.log('WebSocket connection closed');
+    ws.onclose = (event) => {
+      console.log('WebSocket connection closed:', event);
+      if (!event.wasClean && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts++;
+        console.log(`Attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+        setTimeout(connectWebSocket, RECONNECT_DELAY * reconnectAttempts);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      // Don't attempt to reconnect here, let onclose handle it
+    };
+  } catch (error) {
+    console.error('Error creating WebSocket connection:', error);
     if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       reconnectAttempts++;
       console.log(`Attempting to reconnect (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
       setTimeout(connectWebSocket, RECONNECT_DELAY * reconnectAttempts);
     }
-  };
-
-  ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-  };
+  }
 };
 
 export const sendMessage = (type, data) => {

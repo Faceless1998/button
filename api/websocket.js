@@ -19,41 +19,51 @@ const gameState = {
 };
 
 export default function handler(req, res) {
-  if (!wss) {
-    wss = new Server({ noServer: true });
-
-    wss.on('connection', (ws, request) => {
-      const id = Math.random().toString(36).substring(7);
-      clients.set(ws, { id, role: null });
-
-      ws.on('message', (message) => {
-        try {
-          const data = JSON.parse(message);
-          handleMessage(ws, data);
-        } catch (error) {
-          console.error('Error handling message:', error);
-        }
-      });
-
-      ws.on('close', () => {
-        const client = clients.get(ws);
-        if (client && client.role) {
-          gameState.connectedClients[client.role] = null;
-          broadcastGameState();
-        }
-        clients.delete(ws);
-      });
-
-      // Send initial game state
-      ws.send(JSON.stringify({
-        type: 'gameState',
-        data: gameState
-      }));
-    });
-  }
-
   if (req.method === 'GET') {
-    res.status(101).end();
+    // Handle WebSocket upgrade
+    if (req.headers.upgrade === 'websocket') {
+      if (!wss) {
+        // Initialize WebSocket server
+        wss = new Server({ noServer: true });
+        
+        wss.on('connection', (ws, request) => {
+          const id = Math.random().toString(36).substring(7);
+          clients.set(ws, { id, role: null });
+
+          ws.on('message', (message) => {
+            try {
+              const data = JSON.parse(message);
+              handleMessage(ws, data);
+            } catch (error) {
+              console.error('Error handling message:', error);
+            }
+          });
+
+          ws.on('close', () => {
+            const client = clients.get(ws);
+            if (client && client.role) {
+              gameState.connectedClients[client.role] = null;
+              broadcastGameState();
+            }
+            clients.delete(ws);
+          });
+
+          // Send initial game state
+          ws.send(JSON.stringify({
+            type: 'gameState',
+            data: gameState
+          }));
+        });
+      }
+
+      // Handle the WebSocket upgrade
+      const { socket, head } = res.socket.server;
+      wss.handleUpgrade(req, socket, head, (ws) => {
+        wss.emit('connection', ws, req);
+      });
+    } else {
+      res.status(426).json({ error: 'Upgrade Required' });
+    }
   } else {
     res.status(405).json({ error: 'Method not allowed' });
   }
