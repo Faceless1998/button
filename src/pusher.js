@@ -2,6 +2,7 @@ import Pusher from 'pusher-js';
 
 let pusher = null;
 let gameChannel = null;
+let currentRole = null;
 
 const BACKEND_URL = 'https://button-five-brown.vercel.app';
 
@@ -10,6 +11,9 @@ export const initializePusher = (role) => {
     console.log('Pusher already initialized, disconnecting first...');
     disconnectPusher();
   }
+
+  // Store the role
+  currentRole = role;
 
   // Initialize Pusher with the correct configuration
   pusher = new Pusher('854ee9c076bcdcb6ff9a', {
@@ -53,11 +57,18 @@ const subscribeToGameChannel = () => {
     gameChannel.bind('pusher:subscription_succeeded', () => {
       console.log('Successfully subscribed to game-channel');
       // Send initial connection event with retry logic
-      sendGameEventWithRetry('clientConnected', { role: pusher.config.auth.params.role });
+      sendGameEventWithRetry('clientConnected', { role: currentRole });
     });
 
     gameChannel.bind('pusher:subscription_error', (error) => {
       console.error('Failed to subscribe to game-channel:', error);
+    });
+
+    // Listen for game state updates
+    gameChannel.bind('game-event', (event) => {
+      if (event.type === 'gameState') {
+        console.log('Received game state update:', event.data);
+      }
     });
   } catch (error) {
     console.error('Error in subscribeToGameChannel:', error);
@@ -130,6 +141,7 @@ export const disconnectPusher = () => {
     } finally {
       pusher = null;
       gameChannel = null;
+      currentRole = null;
     }
   }
 };
