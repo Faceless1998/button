@@ -4,7 +4,8 @@ let pusher = null;
 let gameChannel = null;
 let currentRole = null;
 
-const BACKEND_URL = 'https://button-five-brown.vercel.app';
+// Use the current window's origin for API calls
+const BACKEND_URL = window.location.origin;
 
 export const initializePusher = (role) => {
   if (pusher) {

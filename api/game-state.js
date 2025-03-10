@@ -1,5 +1,5 @@
 // In-memory game state
-let gameState = {
+const gameState = {
   isActive: false,
   player1Name: 'Player 1',
   player2Name: 'Player 2',
@@ -15,7 +15,7 @@ let gameState = {
 };
 
 // Check if a role is available
-const isRoleAvailable = (role) => {
+export const isRoleAvailable = (role) => {
   if (!['admin', 'player1', 'player2'].includes(role)) {
     return false;
   }
@@ -23,12 +23,12 @@ const isRoleAvailable = (role) => {
 };
 
 // Get count of connected clients
-const getConnectedCount = () => {
+export const getConnectedCount = () => {
   return Object.values(gameState.connectedClients).filter(Boolean).length;
 };
 
 // Assign role to a client
-const assignRole = (role, socketId) => {
+export const assignRole = (role, socketId) => {
   if (isRoleAvailable(role)) {
     gameState.connectedClients[role] = socketId;
     return true;
@@ -37,7 +37,7 @@ const assignRole = (role, socketId) => {
 };
 
 // Remove client when they disconnect
-const removeClient = (socketId) => {
+export const removeClient = (socketId) => {
   const roles = Object.keys(gameState.connectedClients);
   for (const role of roles) {
     if (gameState.connectedClients[role] === socketId) {
@@ -47,24 +47,12 @@ const removeClient = (socketId) => {
 };
 
 // Get current game state
-const getGameState = () => {
+export const getGameState = () => {
   return { ...gameState };
 };
 
 // Update game state
-const updateGameState = (updates) => {
-  gameState = {
-    ...gameState,
-    ...updates
-  };
-  return gameState;
-};
-
-module.exports = {
-  isRoleAvailable,
-  getConnectedCount,
-  assignRole,
-  removeClient,
-  getGameState,
-  updateGameState
+export const updateGameState = (updates) => {
+  Object.assign(gameState, updates);
+  return { ...gameState };
 }; 
