@@ -3,7 +3,7 @@ import Pusher from 'pusher-js';
 let pusher = null;
 let gameChannel = null;
 
-const BACKEND_URL = 'https://button-iwubevcvc-dualname.vercel.app';
+const BACKEND_URL = 'https://button-five-brown.vercel.app';
 
 export const initializePusher = (role) => {
   if (pusher) {
