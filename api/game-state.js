@@ -1,45 +1,49 @@
-// Game state management
+// In-memory game state
 let gameState = {
+  isActive: false,
+  player1Name: 'Player 1',
+  player2Name: 'Player 2',
+  message: '',
+  isError: false,
+  winner: null,
+  canBuzz: true,
   connectedClients: {
     admin: null,
     player1: null,
     player2: null
-  },
-  isActive: false,
-  player1Name: 'Player 1',
-  player2Name: 'Player 2',
-  canBuzz: true,
-  winner: null,
-  message: '',
-  isError: false
+  }
 };
 
-// Check if role is available
+// Check if a role is available
 const isRoleAvailable = (role) => {
-  return gameState.connectedClients[role] === null;
-};
-
-// Count connected clients
-const getConnectedCount = () => {
-  return Object.values(gameState.connectedClients).filter(client => client !== null).length;
-};
-
-// Assign role to client
-const assignRole = (role, socketId) => {
-  if (getConnectedCount() >= 3) {
+  if (!['admin', 'player1', 'player2'].includes(role)) {
     return false;
   }
-  gameState.connectedClients[role] = socketId;
-  return true;
+  return !gameState.connectedClients[role];
 };
 
-// Remove client from role
+// Get count of connected clients
+const getConnectedCount = () => {
+  return Object.values(gameState.connectedClients).filter(Boolean).length;
+};
+
+// Assign role to a client
+const assignRole = (role, socketId) => {
+  if (isRoleAvailable(role)) {
+    gameState.connectedClients[role] = socketId;
+    return true;
+  }
+  return false;
+};
+
+// Remove client when they disconnect
 const removeClient = (socketId) => {
-  Object.keys(gameState.connectedClients).forEach(role => {
+  const roles = Object.keys(gameState.connectedClients);
+  for (const role of roles) {
     if (gameState.connectedClients[role] === socketId) {
       gameState.connectedClients[role] = null;
     }
-  });
+  }
 };
 
 // Get current game state
@@ -49,11 +53,14 @@ const getGameState = () => {
 
 // Update game state
 const updateGameState = (updates) => {
-  gameState = { ...gameState, ...updates };
+  gameState = {
+    ...gameState,
+    ...updates
+  };
+  return gameState;
 };
 
 module.exports = {
-  gameState,
   isRoleAvailable,
   getConnectedCount,
   assignRole,

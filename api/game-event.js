@@ -6,10 +6,10 @@ const {
 } = require('./game-state');
 
 const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID,
-  key: '854ee9c076bcdcb6ff9a',
-  secret: process.env.PUSHER_SECRET,
-  cluster: 'ap2',
+  appId: "1955089",
+  key: "854ee9c076bcdcb6ff9a",
+  secret: "70f13c3b8e26efecfce9",
+  cluster: "ap2",
   useTLS: true
 });
 
