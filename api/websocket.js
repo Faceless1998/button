@@ -1,8 +1,8 @@
-import { Server } from 'ws';
+export const config = {
+  runtime: 'edge',
+};
 
-let wss = null;
 const clients = new Map();
-
 const gameState = {
   isActive: false,
   player1Name: 'Player 1',
@@ -18,59 +18,48 @@ const gameState = {
   }
 };
 
-export default function handler(req, res) {
-  if (req.method === 'GET') {
-    // Handle WebSocket upgrade
-    if (req.headers.upgrade === 'websocket') {
-      if (!wss) {
-        // Initialize WebSocket server
-        wss = new Server({ noServer: true });
-        
-        wss.on('connection', (ws, request) => {
-          const id = Math.random().toString(36).substring(7);
-          clients.set(ws, { id, role: null });
+export default async function handler(req) {
+  if (req.method !== 'GET') {
+    return new Response('Method not allowed', { status: 405 });
+  }
 
-          ws.on('message', (message) => {
-            try {
-              const data = JSON.parse(message);
-              handleMessage(ws, data);
-            } catch (error) {
-              console.error('Error handling message:', error);
-            }
-          });
+  try {
+    const { socket, response } = Deno.upgradeWebSocket(req);
 
-          ws.on('close', () => {
-            const client = clients.get(ws);
-            if (client && client.role) {
-              gameState.connectedClients[client.role] = null;
-              broadcastGameState();
-            }
-            clients.delete(ws);
-          });
+    const id = Math.random().toString(36).substring(7);
+    clients.set(socket, { id, role: null });
 
-          // Send initial game state
-          ws.send(JSON.stringify({
-            type: 'gameState',
-            data: gameState
-          }));
-        });
+    socket.onopen = () => {
+      console.log('Client connected:', id);
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        handleMessage(socket, message);
+      } catch (error) {
+        console.error('Error handling message:', error);
       }
+    };
 
-      // Handle the WebSocket upgrade
-      const { socket, head } = res.socket.server;
-      wss.handleUpgrade(req, socket, head, (ws) => {
-        wss.emit('connection', ws, req);
-      });
-    } else {
-      res.status(426).json({ error: 'Upgrade Required' });
-    }
-  } else {
-    res.status(405).json({ error: 'Method not allowed' });
+    socket.onclose = () => {
+      const client = clients.get(socket);
+      if (client?.role) {
+        gameState.connectedClients[client.role] = null;
+        broadcastGameState();
+      }
+      clients.delete(socket);
+    };
+
+    return response;
+  } catch (err) {
+    console.error('WebSocket upgrade failed:', err);
+    return new Response('WebSocket upgrade failed', { status: 400 });
   }
 }
 
-function handleMessage(ws, message) {
-  const client = clients.get(ws);
+function handleMessage(socket, message) {
+  const client = clients.get(socket);
   if (!client) return;
 
   switch (message.type) {
@@ -81,7 +70,7 @@ function handleMessage(ws, message) {
         gameState.connectedClients[role] = client.id;
         broadcastGameState();
       } else {
-        ws.send(JSON.stringify({
+        socket.send(JSON.stringify({
           type: 'error',
           data: { message: 'Role not available' }
         }));
@@ -138,8 +127,8 @@ function broadcastGameState() {
     data: gameState
   });
 
-  for (const client of clients.keys()) {
-    client.send(message);
+  for (const [socket] of clients) {
+    socket.send(message);
   }
 }
 

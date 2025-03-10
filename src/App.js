@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { initializeWebSocket, sendMessage, addMessageHandler, removeMessageHandler } from './websocket';
 
 const gradientAnimation = keyframes`
   0% { background-position: 0% 50%; }
@@ -310,6 +309,26 @@ const WaitingText = styled.h2`
   }
 `;
 
+const Status = styled.div`
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 10px 20px;
+  border-radius: 20px;
+  background: ${props => props.connected ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)'};
+  color: ${props => props.connected ? '#4ade80' : '#ff6b6b'};
+  backdrop-filter: blur(5px);
+  font-size: 0.9rem;
+  z-index: 1000;
+`;
+
+const Controls = styled.div`
+  display: flex;
+  gap: 20px;
+  margin-top: 20px;
+  justify-content: center;
+`;
+
 const PlayerView = ({ playerNumber, playerName, setPlayerName, isActive, canBuzz, onBuzz }) => (
   <Container>
     <Title>Player {playerNumber}</Title>
@@ -347,90 +366,111 @@ const AdminView = ({ isActive, toggleActive, resetGame, message, isError, showMe
   </Container>
 );
 
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://your-vercel-url.vercel.app/api'  // Replace with your Vercel URL
+  : 'http://localhost:3000/api';
+
 function App() {
-  const [deviceType, setDeviceType] = useState(null);
+  const [role, setRole] = useState(null);
   const [gameState, setGameState] = useState({
     isActive: false,
-    player1Name: 'Player 1',
-    player2Name: 'Player 2',
-    message: '',
-    isError: false,
     winner: null,
-    canBuzz: true,
-    connectedClients: {
-      admin: null,
-      player1: null,
-      player2: null
+    players: {
+      admin: { connected: false },
+      player1: { connected: false },
+      player2: { connected: false }
     }
   });
   const [showMessage, setShowMessage] = useState(false);
 
   useEffect(() => {
-    if (deviceType) {
-      initializeWebSocket(deviceType);
+    const pollState = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_URL}/state`);
+        const state = await response.json();
+        setGameState(state);
+      } catch (error) {
+        console.error('Failed to fetch state:', error);
+      }
+    }, 1000);
 
-      const handleGameState = (newState) => {
-        setGameState(newState);
-        if (newState.message) {
-          setShowMessage(true);
+    return () => clearInterval(pollState);
+  }, []);
+
+  useEffect(() => {
+    if (role) {
+      const connect = async () => {
+        try {
+          await fetch(`${API_URL}/connect/${role}`, { method: 'POST' });
+        } catch (error) {
+          console.error('Failed to connect:', error);
         }
       };
 
-      addMessageHandler('gameState', handleGameState);
-      addMessageHandler('error', (error) => {
-        alert(error.message);
-        setDeviceType(null);
-      });
+      connect();
 
+      window.addEventListener('beforeunload', handleDisconnect);
       return () => {
-        removeMessageHandler('gameState', handleGameState);
+        window.removeEventListener('beforeunload', handleDisconnect);
+        handleDisconnect();
       };
     }
-  }, [deviceType]);
+  }, [role]);
 
-  const handleRoleSelect = (role) => {
-    setDeviceType(role);
+  const handleDisconnect = async () => {
+    if (role) {
+      try {
+        await fetch(`${API_URL}/disconnect/${role}`, { method: 'POST' });
+      } catch (error) {
+        console.error('Failed to disconnect:', error);
+      }
+    }
   };
 
-  const handleBuzzer = (playerName) => {
-    if (!gameState.canBuzz) return;
-    sendMessage('buzz', { playerName });
+  const handleBuzz = async () => {
+    try {
+      await fetch(`${API_URL}/buzz/${role}`, { method: 'POST' });
+    } catch (error) {
+      console.error('Failed to buzz:', error);
+    }
   };
 
-  const resetGame = () => {
-    sendMessage('reset');
+  const handleToggle = async () => {
+    try {
+      await fetch(`${API_URL}/toggle`, { method: 'POST' });
+    } catch (error) {
+      console.error('Failed to toggle:', error);
+    }
   };
 
-  const toggleActive = () => {
-    sendMessage('toggleActive', { value: !gameState.isActive });
+  const handleReset = async () => {
+    try {
+      await fetch(`${API_URL}/reset`, { method: 'POST' });
+    } catch (error) {
+      console.error('Failed to reset:', error);
+    }
   };
 
-  const updatePlayerName = (playerNumber, name) => {
-    sendMessage('updateName', { playerNumber, name });
-  };
-
-  const allClientsConnected = Object.values(gameState.connectedClients).every(client => client !== null);
-
-  if (!deviceType) {
+  if (!role) {
     return (
       <Container>
-        <Title>Select Device Type</Title>
+        <Title>Select Your Role</Title>
         <DeviceSelection>
           <DeviceButton 
-            onClick={() => handleRoleSelect('admin')}
-            disabled={gameState.connectedClients.admin !== null}
+            onClick={() => setRole('admin')}
+            disabled={gameState.players.admin.connected}
           >
             🎮 Game Controller
           </DeviceButton>
           <DeviceButton 
-            onClick={() => handleRoleSelect('player1')}
-            disabled={gameState.connectedClients.player1 !== null}
+            onClick={() => setRole('player1')}
+            disabled={gameState.players.player1.connected}
           >
             🎯 Player 1 Device
           </DeviceButton>
           <DeviceButton 
-            onClick={() => handleRoleSelect('player2')}
-            disabled={gameState.connectedClients.player2 !== null}
+            onClick={() => setRole('player2')}
+            disabled={gameState.players.player2.connected}
           >
             🎯 Player 2 Device
           </DeviceButton>
@@ -439,57 +479,56 @@ function App() {
     );
   }
 
-  if (!allClientsConnected) {
-    return (
-      <Container>
-        <WaitingScreen>
-          <WaitingText>Waiting for all players to connect</WaitingText>
-          <div>Connected: {Object.values(gameState.connectedClients).filter(Boolean).length}/3</div>
-        </WaitingScreen>
-        {deviceType && <ConnectionStatus $isConnected={Object.values(gameState.connectedClients).filter(Boolean).length > 0}>
-          {Object.values(gameState.connectedClients).filter(Boolean).length > 0 ? 'Connected' : 'Disconnected'}
-        </ConnectionStatus>}
-      </Container>
-    );
-  }
+  const isConnected = gameState.players[role]?.connected;
+  const allConnected = Object.values(gameState.players).every(p => p.connected);
 
-  switch (deviceType) {
-    case 'admin':
-      return (
-        <AdminView
-          isActive={gameState.isActive}
-          toggleActive={toggleActive}
-          resetGame={resetGame}
-          message={gameState.message}
-          isError={gameState.isError}
-          showMessage={showMessage}
-        />
-      );
-    case 'player1':
-      return (
-        <PlayerView
-          playerNumber={1}
-          playerName={gameState.player1Name}
-          setPlayerName={(name) => updatePlayerName(1, name)}
-          isActive={gameState.isActive}
-          canBuzz={gameState.canBuzz}
-          onBuzz={handleBuzzer}
-        />
-      );
-    case 'player2':
-      return (
-        <PlayerView
-          playerNumber={2}
-          playerName={gameState.player2Name}
-          setPlayerName={(name) => updatePlayerName(2, name)}
-          isActive={gameState.isActive}
-          canBuzz={gameState.canBuzz}
-          onBuzz={handleBuzzer}
-        />
-      );
-    default:
-      return null;
-  }
+  return (
+    <Container>
+      <Status connected={isConnected}>
+        {isConnected ? 'Connected' : 'Disconnected'}
+      </Status>
+
+      {role === 'admin' ? (
+        <>
+          <Title>Game Control</Title>
+          <AdminControls>
+            <AdminTitle>Admin Controls</AdminTitle>
+            <Button primary onClick={handleToggle} disabled={!allConnected}>
+              {gameState.isActive ? '🔴 Stop Game' : '🟢 Start Game'}
+            </Button>
+            <Button onClick={handleReset}>
+              🔄 Reset Game
+            </Button>
+          </AdminControls>
+        </>
+      ) : (
+        <>
+          <Title>Player {role === 'player1' ? '1' : '2'}</Title>
+          <PlayerCard>
+            <BuzzerButton
+              isActive={gameState.isActive}
+              onClick={handleBuzz}
+              disabled={!gameState.isActive || gameState.winner}
+            >
+              <BuzzerText>BUZZ!</BuzzerText>
+            </BuzzerButton>
+          </PlayerCard>
+        </>
+      )}
+
+      {gameState.winner && (
+        <Message winner show>
+          {gameState.winner === role ? 'You won!' : `${gameState.winner} won!`}
+        </Message>
+      )}
+
+      <Message show>
+        {!allConnected ? 'Waiting for all players...' : 
+         !gameState.isActive ? 'Waiting for admin to start...' :
+         gameState.winner ? 'Game Over!' : 'Game Active!'}
+      </Message>
+    </Container>
+  );
 }
 
 export default App; 
