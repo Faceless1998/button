@@ -271,7 +271,7 @@ function App() {
   useEffect(() => {
     const connectWebSocket = () => {
       const wsUrl = process.env.NODE_ENV === 'production'
-        ? `wss://${window.location.host}/api/websocket`
+        ? `wss://batumi-gimnazia.edu.ge/buzzer/api/websocket`
         : 'ws://localhost:3001/api/websocket';
 
       const socket = new WebSocket(wsUrl);
