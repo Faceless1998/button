@@ -3,6 +3,8 @@ import Pusher from 'pusher-js';
 let pusher = null;
 let gameChannel = null;
 
+const BACKEND_URL = 'https://button-dualname.vercel.app';
+
 export const initializePusher = (role) => {
   if (pusher) {
     console.log('Pusher already initialized, disconnecting first...');
@@ -14,8 +16,12 @@ export const initializePusher = (role) => {
     cluster: 'ap2',
     forceTLS: true,
     enabledTransports: ['ws', 'wss'],
-    authEndpoint: 'https://rsr-xi.vercel.app/api/pusher-auth',
+    authEndpoint: `${BACKEND_URL}/api/pusher-auth`,
     auth: {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json',
+      },
       params: { role }
     }
   });
@@ -40,22 +46,42 @@ export const initializePusher = (role) => {
 };
 
 const subscribeToGameChannel = () => {
-  // Subscribe to game channel
-  gameChannel = pusher.subscribe('game-channel');
+  try {
+    // Subscribe to game channel
+    gameChannel = pusher.subscribe('game-channel');
 
-  // Add channel subscription logging
-  gameChannel.bind('pusher:subscription_succeeded', () => {
-    console.log('Successfully subscribed to game-channel');
-    // Send initial connection event
-    sendGameEvent('clientConnected', {});
-  });
+    // Add channel subscription logging
+    gameChannel.bind('pusher:subscription_succeeded', () => {
+      console.log('Successfully subscribed to game-channel');
+      // Send initial connection event with retry logic
+      sendGameEventWithRetry('clientConnected', {});
+    });
 
-  gameChannel.bind('pusher:subscription_error', (error) => {
-    console.error('Failed to subscribe to game-channel:', error);
-  });
+    gameChannel.bind('pusher:subscription_error', (error) => {
+      console.error('Failed to subscribe to game-channel:', error);
+    });
+  } catch (error) {
+    console.error('Error in subscribeToGameChannel:', error);
+  }
 };
 
-export const sendGameEvent = (eventType, data) => {
+const sendGameEventWithRetry = async (eventType, data, retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      await sendGameEvent(eventType, data);
+      return; // Success, exit the retry loop
+    } catch (error) {
+      console.warn(`Attempt ${i + 1} failed:`, error);
+      if (i === retries - 1) {
+        console.error('All retry attempts failed for event:', eventType);
+      } else {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+      }
+    }
+  }
+};
+
+export const sendGameEvent = async (eventType, data) => {
   if (!pusher || pusher.connection.state !== 'connected') {
     console.error('Pusher not initialized or not connected. Current state:', pusher?.connection?.state);
     return;
@@ -63,36 +89,41 @@ export const sendGameEvent = (eventType, data) => {
 
   const socketId = pusher.connection.socket_id;
   
-  fetch('https://rsr-xi.vercel.app/api/game-event', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      type: eventType,
-      data,
-      socketId
-    }),
-  })
-  .then(response => {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/game-event`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Origin': window.location.origin
+      },
+      mode: 'cors',
+      credentials: 'omit',
+      body: JSON.stringify({
+        type: eventType,
+        data,
+        socketId
+      }),
+    });
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    return response.json();
-  })
-  .then(data => {
-    console.log('Game event sent successfully:', eventType, data);
-  })
-  .catch(error => {
+
+    const responseData = await response.json();
+    console.log('Game event sent successfully:', eventType, responseData);
+    return responseData;
+  } catch (error) {
     console.error('Error sending game event:', error);
-  });
+    throw error; // Re-throw for retry mechanism
+  }
 };
 
 export const disconnectPusher = () => {
   if (pusher) {
     try {
       if (pusher.connection.state === 'connected') {
-        sendGameEvent('disconnect', {});
+        sendGameEvent('disconnect', {}).catch(console.error);
       }
       if (gameChannel) {
         gameChannel.unbind_all();
