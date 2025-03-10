@@ -53,7 +53,7 @@ const subscribeToGameChannel = () => {
     gameChannel.bind('pusher:subscription_succeeded', () => {
       console.log('Successfully subscribed to game-channel');
       // Send initial connection event with retry logic
-      sendGameEventWithRetry('clientConnected', {});
+      sendGameEventWithRetry('clientConnected', { role: pusher.config.auth.params.role });
     });
 
     gameChannel.bind('pusher:subscription_error', (error) => {
