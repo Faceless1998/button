@@ -349,7 +349,6 @@ const AdminView = ({ isActive, toggleActive, resetGame, message, isError, showMe
 
 function App() {
   const [deviceType, setDeviceType] = useState(null);
-  const [isConnected, setIsConnected] = useState(false);
   const [gameState, setGameState] = useState({
     isActive: false,
     player1Name: 'Player 1',
@@ -478,8 +477,8 @@ function App() {
           <WaitingText>Waiting for all players to connect</WaitingText>
           <div>Connected: {Object.values(gameState.connectedClients).filter(Boolean).length}/3</div>
         </WaitingScreen>
-        {deviceType && <ConnectionStatus $isConnected={isConnected}>
-          {isConnected ? 'Connected' : 'Disconnected'}
+        {deviceType && <ConnectionStatus $isConnected={Object.values(gameState.connectedClients).filter(Boolean).length > 0}>
+          {Object.values(gameState.connectedClients).filter(Boolean).length > 0 ? 'Connected' : 'Disconnected'}
         </ConnectionStatus>}
       </Container>
     );
