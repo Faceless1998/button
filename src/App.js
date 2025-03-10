@@ -367,7 +367,7 @@ const AdminView = ({ isActive, toggleActive, resetGame, message, isError, showMe
 );
 
 const API_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-vercel-url.vercel.app/api'  // Replace with your Vercel URL
+  ? 'https://button-five-brown.vercel.app/api'  // Replace with your Vercel URL
   : 'http://localhost:3000/api';
 
 function App() {
