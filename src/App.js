@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { initializePusher, sendGameEvent, disconnectPusher } from './pusher';
+import { initializeWebSocket, sendMessage, addMessageHandler, removeMessageHandler } from './websocket';
 
 const gradientAnimation = keyframes`
   0% { background-position: 0% 50%; }
@@ -366,78 +366,47 @@ function App() {
   const [showMessage, setShowMessage] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-
-    const handleGameEvent = (event) => {
-      if (!mounted) return;
-
-      const { type, data } = event;
-      
-      switch (type) {
-        case 'gameState':
-          setGameState(prev => ({
-            ...prev,
-            ...data
-          }));
-          if (data.message) {
-            setShowMessage(true);
-          }
-          break;
-
-        case 'roleRejected':
-          alert(data.message);
-          setDeviceType(null);
-          break;
-
-        case 'clientConnected':
-        case 'clientDisconnected':
-          setGameState(prev => ({
-            ...prev,
-            connectedClients: data.connectedClients
-          }));
-          break;
-
-        default:
-          break;
-      }
-    };
-
     if (deviceType) {
-      // Initialize Pusher when device type is selected
-      const channel = initializePusher(deviceType);
-      
-      // Bind to game events
-      channel.bind('game-event', handleGameEvent);
+      initializeWebSocket(deviceType);
 
-      // Cleanup function
+      const handleGameState = (newState) => {
+        setGameState(newState);
+        if (newState.message) {
+          setShowMessage(true);
+        }
+      };
+
+      addMessageHandler('gameState', handleGameState);
+      addMessageHandler('error', (error) => {
+        alert(error.message);
+        setDeviceType(null);
+      });
+
       return () => {
-        mounted = false;
-        channel.unbind('game-event', handleGameEvent);
-        disconnectPusher();
+        removeMessageHandler('gameState', handleGameState);
       };
     }
   }, [deviceType]);
 
   const handleRoleSelect = (role) => {
     setDeviceType(role);
-    sendGameEvent('requestRole', { role });
   };
 
   const handleBuzzer = (playerName) => {
     if (!gameState.canBuzz) return;
-    sendGameEvent('buzz', { playerName });
+    sendMessage('buzz', { playerName });
   };
 
   const resetGame = () => {
-    sendGameEvent('reset');
+    sendMessage('reset');
   };
 
   const toggleActive = () => {
-    sendGameEvent('toggleActive', { value: !gameState.isActive });
+    sendMessage('toggleActive', { value: !gameState.isActive });
   };
 
   const updatePlayerName = (playerNumber, name) => {
-    sendGameEvent('updateName', { playerNumber, name });
+    sendMessage('updateName', { playerNumber, name });
   };
 
   const allClientsConnected = Object.values(gameState.connectedClients).every(client => client !== null);
