@@ -129,29 +129,6 @@ const BuzzerText = styled.span`
   z-index: 1;
 `;
 
-const NameInput = styled.input`
-  padding: 15px;
-  font-size: 1.2rem;
-  background: rgba(255, 255, 255, 0.07);
-  border: 2px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  color: #fff;
-  margin-bottom: 25px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-
-  &:focus {
-    outline: none;
-    border-color: #e94560;
-    background: rgba(255, 255, 255, 0.1);
-    box-shadow: 0 8px 20px rgba(233, 69, 96, 0.2);
-  }
-
-  &::placeholder {
-    color: rgba(255, 255, 255, 0.4);
-  }
-`;
-
 const Message = styled.div`
   margin: 30px auto;
   font-size: 1.6rem;
@@ -167,8 +144,8 @@ const Message = styled.div`
   max-width: 800px;
   border: 1px solid ${props => props.isError ? 'rgba(255, 107, 107, 0.3)' : 'rgba(74, 222, 128, 0.3)'};
   box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
-  transform: translateY(${props => props.show ? '0' : '-20px'});
-  opacity: ${props => props.show ? '1' : '0'};
+  transform: translateY(${props => props.$visible ? '0' : '-20px'});
+  opacity: ${props => props.$visible ? '1' : '0'};
 `;
 
 const AdminControls = styled.div`
@@ -263,52 +240,6 @@ const DeviceButton = styled(Button)`
     : 'rgba(255, 255, 255, 0.1)'};
 `;
 
-const ConnectionStatus = styled.div`
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  padding: 10px 20px;
-  border-radius: 20px;
-  background: ${({ $isConnected }) => $isConnected ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)'};
-  color: ${({ $isConnected }) => $isConnected ? '#4ade80' : '#ff6b6b'};
-  backdrop-filter: blur(5px);
-  font-size: 0.9rem;
-  z-index: 1000;
-`;
-
-const WaitingScreen = styled.div`
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(5px);
-`;
-
-const LoadingDots = keyframes`
-  0%, 20% { content: '.'; }
-  40% { content: '..'; }
-  60% { content: '...'; }
-  80%, 100% { content: ''; }
-`;
-
-const WaitingText = styled.h2`
-  color: white;
-  font-size: 2rem;
-  margin-bottom: 1rem;
-  
-  &:after {
-    content: '';
-    animation: ${LoadingDots} 1.5s infinite;
-  }
-`;
-
 const Status = styled.div`
   position: fixed;
   top: 20px;
@@ -322,132 +253,86 @@ const Status = styled.div`
   z-index: 1000;
 `;
 
-const Controls = styled.div`
-  display: flex;
-  gap: 20px;
-  margin-top: 20px;
-  justify-content: center;
-`;
-
-const PlayerView = ({ playerNumber, playerName, setPlayerName, isActive, canBuzz, onBuzz }) => (
-  <Container>
-    <Title>Player {playerNumber}</Title>
-    <PlayerCard style={{ margin: '40px auto' }}>
-      <NameInput
-        type="text"
-        value={playerName}
-        onChange={(e) => setPlayerName(e.target.value)}
-        placeholder={`Enter Player ${playerNumber} Name`}
-      />
-      <BuzzerButton
-        isActive={isActive}
-        onClick={() => onBuzz(playerName)}
-        disabled={!canBuzz}
-      >
-        <BuzzerText>{playerName}'s Buzzer</BuzzerText>
-      </BuzzerButton>
-    </PlayerCard>
-  </Container>
-);
-
-const AdminView = ({ isActive, toggleActive, resetGame, message, isError, showMessage }) => (
-  <Container>
-    <Title>Game Controller</Title>
-    <AdminControls>
-      <AdminTitle>Admin Controls</AdminTitle>
-      <Button primary onClick={toggleActive}>
-        {isActive ? '🔴 Deactivate Buzzers' : '🟢 Activate Buzzers'}
-      </Button>
-      <Button onClick={resetGame}>
-        🔄 Reset Game
-      </Button>
-    </AdminControls>
-    {message && <Message isError={isError} show={showMessage}>{message}</Message>}
-  </Container>
-);
-
-const API_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://button-five-brown.vercel.app/api'  // Replace with your Vercel URL
-  : 'http://localhost:3000/api';
-
 function App() {
   const [role, setRole] = useState(null);
   const [gameState, setGameState] = useState({
     isActive: false,
     winner: null,
+    message: '',
+    isError: false,
     players: {
       admin: { connected: false },
       player1: { connected: false },
       player2: { connected: false }
     }
   });
-  const [showMessage, setShowMessage] = useState(false);
+  const [ws, setWs] = useState(null);
 
   useEffect(() => {
-    const pollState = setInterval(async () => {
-      try {
-        const response = await fetch(`${API_URL}/state`);
-        const state = await response.json();
-        setGameState(state);
-      } catch (error) {
-        console.error('Failed to fetch state:', error);
-      }
-    }, 1000);
+    const connectWebSocket = () => {
+      const wsUrl = process.env.NODE_ENV === 'production'
+        ? `wss://${window.location.host}/api/websocket`
+        : 'ws://localhost:3001/api/websocket';
 
-    return () => clearInterval(pollState);
-  }, []);
+      const socket = new WebSocket(wsUrl);
 
-  useEffect(() => {
-    if (role) {
-      const connect = async () => {
-        try {
-          await fetch(`${API_URL}/connect/${role}`, { method: 'POST' });
-        } catch (error) {
-          console.error('Failed to connect:', error);
+      socket.onopen = () => {
+        console.log('WebSocket connected');
+        if (role) {
+          socket.send(JSON.stringify({
+            type: 'clientConnected',
+            data: { role }
+          }));
         }
       };
 
-      connect();
-
-      window.addEventListener('beforeunload', handleDisconnect);
-      return () => {
-        window.removeEventListener('beforeunload', handleDisconnect);
-        handleDisconnect();
+      socket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        if (message.type === 'gameState') {
+          setGameState(message.data);
+        }
       };
-    }
+
+      socket.onclose = () => {
+        console.log('WebSocket disconnected, attempting to reconnect...');
+        setTimeout(connectWebSocket, 1000);
+      };
+
+      setWs(socket);
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+    };
   }, [role]);
 
-  const handleDisconnect = async () => {
-    if (role) {
-      try {
-        await fetch(`${API_URL}/disconnect/${role}`, { method: 'POST' });
-      } catch (error) {
-        console.error('Failed to disconnect:', error);
-      }
-    }
-  };
-
   const handleBuzz = async () => {
-    try {
-      await fetch(`${API_URL}/buzz/${role}`, { method: 'POST' });
-    } catch (error) {
-      console.error('Failed to buzz:', error);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'buzz',
+        data: { playerName: role }
+      }));
     }
   };
 
   const handleToggle = async () => {
-    try {
-      await fetch(`${API_URL}/toggle`, { method: 'POST' });
-    } catch (error) {
-      console.error('Failed to toggle:', error);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'toggleActive',
+        data: { value: !gameState.isActive }
+      }));
     }
   };
 
   const handleReset = async () => {
-    try {
-      await fetch(`${API_URL}/reset`, { method: 'POST' });
-    } catch (error) {
-      console.error('Failed to reset:', error);
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'reset'
+      }));
     }
   };
 
@@ -506,9 +391,9 @@ function App() {
           <Title>Player {role === 'player1' ? '1' : '2'}</Title>
           <PlayerCard>
             <BuzzerButton
-              isActive={gameState.isActive}
+              isActive={true}
               onClick={handleBuzz}
-              disabled={!gameState.isActive || gameState.winner}
+              disabled={gameState.winner}
             >
               <BuzzerText>BUZZ!</BuzzerText>
             </BuzzerButton>
@@ -516,13 +401,13 @@ function App() {
         </>
       )}
 
-      {gameState.winner && (
-        <Message winner show>
-          {gameState.winner === role ? 'You won!' : `${gameState.winner} won!`}
+      {gameState.message && (
+        <Message isError={gameState.isError} $visible={true}>
+          {gameState.message}
         </Message>
       )}
 
-      <Message show>
+      <Message $visible={true}>
         {!allConnected ? 'Waiting for all players...' : 
          !gameState.isActive ? 'Waiting for admin to start...' :
          gameState.winner ? 'Game Over!' : 'Game Active!'}
