@@ -15,9 +15,11 @@ const pusher = new Pusher({
 });
 
 export default async function handler(req, res) {
+  const origin = req.headers.origin;
+  
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader(
     'Access-Control-Allow-Headers',
@@ -35,11 +37,31 @@ export default async function handler(req, res) {
     const { socket_id, channel_name, role } = req.body;
 
     try {
+      // Check if role is available
+      if (!isRoleAvailable(role)) {
+        return res.status(403).json({ 
+          error: 'Role not available',
+          gameState: getGameState()
+        });
+      }
+
+      // Generate auth response
       const authResponse = pusher.authorizeChannel(socket_id, channel_name);
-      res.status(200).json(authResponse);
+      
+      // Assign role to client
+      assignRole(role, socket_id);
+
+      // Send auth response with game state
+      res.status(200).json({
+        ...authResponse,
+        gameState: getGameState()
+      });
     } catch (error) {
       console.error('Pusher auth error:', error);
-      res.status(403).json({ error: 'Unauthorized' });
+      res.status(403).json({ 
+        error: 'Unauthorized',
+        gameState: getGameState()
+      });
     }
   } else {
     res.status(405).json({ error: 'Method not allowed' });

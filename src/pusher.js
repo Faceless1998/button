@@ -3,7 +3,7 @@ import Pusher from 'pusher-js';
 let pusher = null;
 let gameChannel = null;
 
-const BACKEND_URL = 'https://button-dualname.vercel.app';
+const BACKEND_URL = 'https://button-iwubevcvc-dualname.vercel.app';
 
 export const initializePusher = (role) => {
   if (pusher) {
@@ -19,7 +19,6 @@ export const initializePusher = (role) => {
     authEndpoint: `${BACKEND_URL}/api/pusher-auth`,
     auth: {
       headers: {
-        'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json',
       },
       params: { role }
@@ -94,11 +93,7 @@ export const sendGameEvent = async (eventType, data) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Origin': window.location.origin
       },
-      mode: 'cors',
-      credentials: 'omit',
       body: JSON.stringify({
         type: eventType,
         data,
