@@ -129,6 +129,29 @@ const BuzzerText = styled.span`
   z-index: 1;
 `;
 
+const NameInput = styled.input`
+  padding: 15px;
+  font-size: 1.2rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #fff;
+  margin-bottom: 25px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 20px rgba(233, 69, 96, 0.2);
+  }
+
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+`;
+
 const Message = styled.div`
   margin: 30px auto;
   font-size: 1.6rem;
@@ -136,7 +159,7 @@ const Message = styled.div`
   padding: 20px;
   border-radius: 15px;
   background: ${props => props.isError 
-    ? 'rgba(255, 0, 0, 0.15)' 
+    ? 'rgba(255, 0, 0, 0.2)' 
     : 'rgba(0, 255, 0, 0.15)'};
   color: ${props => props.isError ? '#ff6b6b' : '#4ade80'};
   backdrop-filter: blur(10px);
@@ -144,8 +167,15 @@ const Message = styled.div`
   max-width: 800px;
   border: 1px solid ${props => props.isError ? 'rgba(255, 107, 107, 0.3)' : 'rgba(74, 222, 128, 0.3)'};
   box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
-  transform: translateY(${props => props.$visible ? '0' : '-20px'});
-  opacity: ${props => props.$visible ? '1' : '0'};
+  transform: translateY(${props => props.show ? '0' : '-20px'});
+  opacity: ${props => props.show ? '1' : '0'};
+  animation: ${props => props.isError ? 'shake 0.5s ease-in-out' : 'none'};
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    75% { transform: translateX(10px); }
+  }
 `;
 
 const AdminControls = styled.div`
@@ -240,6 +270,52 @@ const DeviceButton = styled(Button)`
     : 'rgba(255, 255, 255, 0.1)'};
 `;
 
+const ConnectionStatus = styled.div`
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 10px 20px;
+  border-radius: 20px;
+  background: ${({ $isConnected }) => $isConnected ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)'};
+  color: ${({ $isConnected }) => $isConnected ? '#4ade80' : '#ff6b6b'};
+  backdrop-filter: blur(5px);
+  font-size: 0.9rem;
+  z-index: 1000;
+`;
+
+const WaitingScreen = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+`;
+
+const LoadingDots = keyframes`
+  0%, 20% { content: '.'; }
+  40% { content: '..'; }
+  60% { content: '...'; }
+  80%, 100% { content: ''; }
+`;
+
+const WaitingText = styled.h2`
+  color: white;
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  
+  &:after {
+    content: '';
+    animation: ${LoadingDots} 1.5s infinite;
+  }
+`;
+
 const Status = styled.div`
   position: fixed;
   top: 20px;
@@ -252,6 +328,54 @@ const Status = styled.div`
   font-size: 0.9rem;
   z-index: 1000;
 `;
+
+const Controls = styled.div`
+  display: flex;
+  gap: 20px;
+  margin-top: 20px;
+  justify-content: center;
+`;
+
+const PlayerView = ({ playerNumber, playerName, setPlayerName, isActive, canBuzz, onBuzz }) => (
+  <Container>
+    <Title>Player {playerNumber}</Title>
+    <PlayerCard style={{ margin: '40px auto' }}>
+      <NameInput
+        type="text"
+        value={playerName}
+        onChange={(e) => setPlayerName(e.target.value)}
+        placeholder={`Enter Player ${playerNumber} Name`}
+      />
+      <BuzzerButton
+        isActive={true}
+        onClick={() => onBuzz(playerName)}
+        disabled={false}
+      >
+        <BuzzerText>{playerName}'s Buzzer</BuzzerText>
+      </BuzzerButton>
+    </PlayerCard>
+  </Container>
+);
+
+const AdminView = ({ isActive, toggleActive, resetGame, message, isError, showMessage }) => (
+  <Container>
+    <Title>Game Controller</Title>
+    <AdminControls>
+      <AdminTitle>Admin Controls</AdminTitle>
+      <Button primary onClick={toggleActive}>
+        {isActive ? '🔴 Deactivate Buzzers' : '🟢 Activate Buzzers'}
+      </Button>
+      <Button onClick={resetGame}>
+        🔄 Reset Game
+      </Button>
+    </AdminControls>
+    {message && <Message isError={isError} show={showMessage}>{message}</Message>}
+  </Container>
+);
+
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://button-five-brown.vercel.app/api'  // Replace with your Vercel URL
+  : 'http://localhost:3001/api';
 
 function App() {
   const [role, setRole] = useState(null);
@@ -266,13 +390,14 @@ function App() {
       player2: { connected: false }
     }
   });
+  const [showMessage, setShowMessage] = useState(true);
   const [ws, setWs] = useState(null);
 
   useEffect(() => {
     const connectWebSocket = () => {
       const wsUrl = process.env.NODE_ENV === 'production'
-        ? `wss://batumi-gimnazia.edu.ge/buzzer/websocket`
-        : 'ws://localhost:3001/websocket';
+        ? `wss://${window.location.host}/api/websocket`
+        : 'ws://localhost:3001/api/websocket';
 
       const socket = new WebSocket(wsUrl);
 
@@ -290,6 +415,7 @@ function App() {
         const message = JSON.parse(event.data);
         if (message.type === 'gameState') {
           setGameState(message.data);
+          setShowMessage(true);
         }
       };
 
@@ -393,7 +519,7 @@ function App() {
             <BuzzerButton
               isActive={true}
               onClick={handleBuzz}
-              disabled={gameState.winner}
+              disabled={false}
             >
               <BuzzerText>BUZZ!</BuzzerText>
             </BuzzerButton>
@@ -402,14 +528,17 @@ function App() {
       )}
 
       {gameState.message && (
-        <Message isError={gameState.isError} $visible={true}>
+        <Message 
+          isError={gameState.isError} 
+          show={showMessage}
+        >
           {gameState.message}
         </Message>
       )}
 
-      <Message $visible={true}>
+      <Message show={showMessage}>
         {!allConnected ? 'Waiting for all players...' : 
-         !gameState.isActive ? 'Waiting for admin to start...' :
+         !gameState.isActive ? 'Game not started - Buzzing will result in false start!' :
          gameState.winner ? 'Game Over!' : 'Game Active!'}
       </Message>
     </Container>

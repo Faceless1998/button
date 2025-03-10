@@ -1,8 +1,8 @@
-  {
+{
   "version": 2,
   "builds": [
     {
-      "src": "api/*.js",
+      "src": "server.js",
       "use": "@vercel/node"
     },
     {
@@ -15,19 +15,12 @@
   ],
   "routes": [
     {
-      "src": "/api/(.*)",
-      "methods": ["OPTIONS", "POST"],
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,OPTIONS,PATCH,DELETE,POST,PUT",
-        "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
-      },
-      "dest": "/api/$1",
-      "continue": true
+      "src": "/api/websocket",
+      "dest": "server.js"
     },
     {
       "src": "/api/(.*)",
-      "dest": "/api/$1"
+      "dest": "server.js"
     },
     {
       "src": "/static/(.*)",
@@ -42,5 +35,9 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ]
+  ],
+  "env": {
+    "PORT": "3001",
+    "FRONTEND_PORT": "3000"
+  }
 } 
