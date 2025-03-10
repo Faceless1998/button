@@ -1,4 +1,4 @@
-const Pusher = require('pusher');
+import Pusher from 'pusher';
 const { 
   isRoleAvailable, 
   getConnectedCount, 
@@ -15,7 +15,7 @@ const pusher = new Pusher({
 });
 
 export default async function handler(req, res) {
-  // Enable CORS
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
@@ -24,51 +24,24 @@ export default async function handler(req, res) {
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
 
+  // Handle preflight request
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
-  }
-
-  try {
+  // Handle authentication request
+  if (req.method === 'POST') {
     const { socket_id, channel_name, role } = req.body;
-    console.log('Authenticating socket:', socket_id, 'for role:', role);
 
-    // Check if role is available and not exceeding max connections
-    if (!isRoleAvailable(role) || getConnectedCount() >= 3) {
-      console.log('Role not available or max connections reached');
-      return res.status(403).json({ 
-        message: 'Role not available or maximum connections reached' 
-      });
+    try {
+      const authResponse = pusher.authorizeChannel(socket_id, channel_name);
+      res.status(200).json(authResponse);
+    } catch (error) {
+      console.error('Pusher auth error:', error);
+      res.status(403).json({ error: 'Unauthorized' });
     }
-
-    // Assign role to client
-    if (!assignRole(role, socket_id)) {
-      console.log('Failed to assign role');
-      return res.status(403).json({ 
-        message: 'Failed to assign role' 
-      });
-    }
-
-    // Authenticate with Pusher
-    const auth = pusher.authenticate(socket_id, channel_name);
-    console.log('Authentication successful for role:', role);
-
-    // Send current game state
-    const gameState = getGameState();
-    
-    res.status(200).json({
-      ...auth,
-      gameState
-    });
-  } catch (error) {
-    console.error('Pusher auth error:', error);
-    res.status(500).json({ 
-      message: 'Error authenticating with Pusher', 
-      error: error.message 
-    });
+  } else {
+    res.status(405).json({ error: 'Method not allowed' });
   }
 } 
