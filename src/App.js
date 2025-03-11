@@ -388,14 +388,10 @@ function App() {
       admin: { connected: false },
       player1: { connected: false },
       player2: { connected: false }
-    },
-    currentPlayer: null,
-    timer: { isRunning: false, timeLeft: 0, type: null }
+    }
   });
   const [showMessage, setShowMessage] = useState(true);
   const [ws, setWs] = useState(null);
-  const [playerId, setPlayerId] = useState(null);
-  const [playerName, setPlayerName] = useState('');
 
   useEffect(() => {
     const connectWebSocket = () => {
@@ -466,48 +462,25 @@ function App() {
     }
   };
 
-  const joinGame = (selectedRole) => {
-    setRole(selectedRole);
-    ws.send(JSON.stringify({
-      type: 'join',
-      role: selectedRole,
-      id: playerId
-    }));
-  };
-
-  const updatePlayerName = () => {
-    ws.send(JSON.stringify({
-      type: 'update_player_name',
-      id: playerId,
-      name: playerName
-    }));
-  };
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   if (!role) {
     return (
       <Container>
         <Title>Select Your Role</Title>
         <DeviceSelection>
           <DeviceButton 
-            onClick={() => joinGame('admin')}
+            onClick={() => setRole('admin')}
             disabled={gameState.players.admin.connected}
           >
             🎮 Game Controller
           </DeviceButton>
           <DeviceButton 
-            onClick={() => joinGame('player1')}
+            onClick={() => setRole('player1')}
             disabled={gameState.players.player1.connected}
           >
             🎯 Player 1 Device
           </DeviceButton>
           <DeviceButton 
-            onClick={() => joinGame('player2')}
+            onClick={() => setRole('player2')}
             disabled={gameState.players.player2.connected}
           >
             🎯 Player 2 Device
@@ -543,13 +516,6 @@ function App() {
         <>
           <Title>Player {role === 'player1' ? '1' : '2'}</Title>
           <PlayerCard>
-            <NameInput
-              type="text"
-              value={playerName}
-              onChange={(e) => setPlayerName(e.target.value)}
-              placeholder={`Enter Player ${role === 'player1' ? '1' : '2'} Name`}
-            />
-            <Button onClick={updatePlayerName}>Update Name</Button>
             <BuzzerButton
               isActive={true}
               onClick={handleBuzz}
@@ -567,12 +533,6 @@ function App() {
           show={showMessage}
         >
           {gameState.message}
-        </Message>
-      )}
-
-      {gameState.timer.isRunning && (
-        <Message show={showMessage}>
-          Time Remaining: {formatTime(gameState.timer.timeLeft)}
         </Message>
       )}
 
